@@ -56,16 +56,15 @@
 
 .add-btn {
   position: absolute;
-  right: -20px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 28px;
-  height: 28px;
+  right: -12px;
+  bottom: 8px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: var(--accent);
   color: white;
   border: 2px solid var(--bg);
-  font-size: 16px;
+  font-size: 13px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -73,10 +72,10 @@
   opacity: 0;
   transition: opacity 0.2s, transform 0.2s;
   box-shadow: 0 2px 12px rgba(99, 102, 241, 0.4);
-  z-index: 10;
+  z-index: 5;
 }
 .node-card:hover .add-btn { opacity: 1; }
-.add-btn:hover { transform: translateY(-50%) scale(1.15); }
+.add-btn:hover { transform: scale(1.2); }
 
 .conn-badge {
   position: absolute;

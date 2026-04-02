@@ -1,6 +1,6 @@
 import { NODE_TYPES, CATEGORIES } from "../../constants/nodeTypes";
 
-export default function PropertiesPanel({ node, addNode, deleteNode, updateNodeData }) {
+export default function PropertiesPanel({ node, addNode, deleteNode, updateNodeData, knowledgeFiles = [] }) {
   if (!node) return null;
   const typeDef = NODE_TYPES[node.type];
 
@@ -35,7 +35,10 @@ export default function PropertiesPanel({ node, addNode, deleteNode, updateNodeD
                 onChange={(e) => updateNodeData(node.id, field.key, e.target.value)}
               >
                 <option value="">-- เลือก --</option>
-                {field.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                {(field.key === "source"
+                  ? knowledgeFiles.map((f) => f.name)
+                  : field.options
+                ).map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             ) : field.type === "textarea" ? (
               <textarea

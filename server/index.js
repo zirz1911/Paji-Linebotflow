@@ -9,8 +9,9 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 
-// ── Flow Config ───────────────────────────────────────────────
+// ── Flow Config + Settings ────────────────────────────────────
 let currentFlow = null;
+let runtimeApiKey = process.env.ANTHROPIC_API_KEY || "";
 
 function getCredentials() {
   const triggerNode = currentFlow?.nodes?.find((n) => n.type === "trigger");
@@ -35,6 +36,13 @@ app.post("/webhook", express.raw({ type: "*/*" }), async (req, res) => {
     return res.status(200).send("OK");
   }
 
+  // LINE Verify request มี body ว่าง — ตอบ 200 ทันที
+  const bodyStr = req.body?.toString() || "";
+  if (!bodyStr || bodyStr === "{}") {
+    console.log("[WEBHOOK] Verify request — OK");
+    return res.status(200).send("OK");
+  }
+
   const signature = req.headers["x-line-signature"] || "";
   const hash = crypto
     .createHmac("sha256", creds.channelSecret)
@@ -42,17 +50,22 @@ app.post("/webhook", express.raw({ type: "*/*" }), async (req, res) => {
     .digest("base64");
 
   if (hash !== signature) {
-    return res.status(400).send("Invalid signature");
+    console.warn("[WEBHOOK] Invalid signature — เช็ค Channel Secret ใน trigger node");
+    return res.status(200).send("OK"); // ตอบ 200 เพื่อไม่ให้ LINE suspend
   }
 
-  const { events = [] } = JSON.parse(req.body.toString());
+  let parsed;
+  try { parsed = JSON.parse(bodyStr); }
+  catch { return res.status(200).send("OK"); }
+
+  const { events = [] } = parsed;
 
   for (const event of events) {
     if (event.type !== "message") continue;
     console.log("[EVENT]", event.type, event.message?.text || event.message?.type);
 
     // รัน flow engine
-    const replyText = await runFlow(currentFlow, event);
+    const replyText = await runFlow(currentFlow, event, runtimeApiKey);
     if (replyText && event.replyToken) {
       await replyMessage(event.replyToken, replyText, creds.channelAccessToken);
     }
@@ -92,10 +105,18 @@ app.get("/api/credentials", (req, res) => {
   res.json({ ...creds, configured: !!(creds.channelSecret && creds.channelAccessToken) });
 });
 
+app.post("/api/settings", (req, res) => {
+  const { apiKey } = req.body || {};
+  if (apiKey) { runtimeApiKey = apiKey; console.log("[SETTINGS] API key updated ✓"); }
+  res.json({ ok: true });
+});
+
 app.post("/api/flow", (req, res) => {
   currentFlow = req.body;
   const creds = getCredentials();
+  const kFiles = (currentFlow?.knowledge || []).map(f => `${f.name}(${f.content?.length || 0}c)`);
   console.log("[FLOW] Saved — credentials:", creds.channelSecret ? "✓" : "✗ not set");
+  console.log("[FLOW] Knowledge files:", kFiles.length > 0 ? kFiles.join(", ") : "none");
   res.json({ ok: true });
 });
 

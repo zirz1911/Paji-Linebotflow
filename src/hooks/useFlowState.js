@@ -3,9 +3,9 @@ import { NODE_TYPES } from "../constants/nodeTypes";
 
 const INITIAL_NODES = [{ id: "node-1", type: "trigger", x: 80, y: 220, data: {} }];
 
-export function useFlowState() {
-  const [nodes, setNodes] = useState(INITIAL_NODES);
-  const [connections, setConnections] = useState([]);
+export function useFlowState(initialState = {}) {
+  const [nodes, setNodes] = useState(initialState.nodes || INITIAL_NODES);
+  const [connections, setConnections] = useState(initialState.connections || []);
   const [selectedNode, setSelectedNode] = useState(null);
   const [showAddMenu, setShowAddMenu] = useState(null);
 
@@ -58,7 +58,7 @@ export function useFlowState() {
       {
         nodes: nodes.map((n) => ({ id: n.id, type: n.type, data: n.data })),
         connections,
-        knowledge: knowledgeFiles.map((f) => f.name),
+        knowledge: knowledgeFiles.map((f) => ({ name: f.name, content: f.content })),
       },
       null,
       2

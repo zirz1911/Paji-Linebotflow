@@ -8,16 +8,16 @@ function OutputPort({ node, yOff, handlePortMouseDown }) {
       title="ลากเพื่อเชื่อม node"
       style={{
         position: "absolute",
-        right: -8,
-        top: `calc(50% + ${yOff}px)`,
+        right: -10,
+        top: `calc(30% + ${yOff}px)`,
         transform: "translateY(-50%)",
-        width: 16,
-        height: 16,
+        width: 18,
+        height: 18,
         borderRadius: "50%",
         background: typeDef.color,
         border: "3px solid var(--bg)",
         cursor: "crosshair",
-        zIndex: 10,
+        zIndex: 20,
         boxShadow: `0 0 8px ${typeDef.color}80`,
         transition: "transform 0.15s, box-shadow 0.15s",
       }}

@@ -7,12 +7,17 @@
  * @param {object} event — LINE message event
  * @returns {string|null} reply text, or null if no reply
  */
-async function runFlow(flow, event) {
-  if (!flow?.nodes?.length) return null;
+async function runFlow(flow, event, apiKey = "") {
+  if (!flow?.nodes?.length) {
+    console.log("[FLOW] No flow deployed yet");
+    return null;
+  }
 
   const { nodes, connections, knowledge = [] } = flow;
   const userText = event.message?.text || "";
   const userId = event.source?.userId || "";
+
+  console.log(`[FLOW] Running — nodes:${nodes.length} conns:${connections.length} text:"${userText}"`);
 
   // Build adjacency: nodeId -> [nextNodeId, ...]
   const graph = {};
@@ -23,7 +28,7 @@ async function runFlow(flow, event) {
 
   // Start from trigger node
   const triggerNode = nodes.find((n) => n.type === "trigger");
-  if (!triggerNode) return null;
+  if (!triggerNode) { console.log("[FLOW] No trigger node"); return null; }
 
   // Context passed between nodes
   const ctx = { userText, userId, knowledgeContext: "", aiResponse: "" };
@@ -31,6 +36,8 @@ async function runFlow(flow, event) {
   // Walk graph BFS from trigger
   const queue = (graph[triggerNode.id] || []).slice();
   const visited = new Set([triggerNode.id]);
+
+  console.log(`[FLOW] Start from trigger → next: [${queue.join(", ")}]`);
 
   while (queue.length > 0) {
     const nodeId = queue.shift();
@@ -40,10 +47,11 @@ async function runFlow(flow, event) {
     const node = nodes.find((n) => n.id === nodeId);
     if (!node) continue;
 
-    const result = await executeNode(node, ctx, knowledge);
+    console.log(`[FLOW] Execute node: ${node.type} (${node.id})`);
+    const result = await executeNode(node, ctx, knowledge, apiKey);
 
-    if (result?.reply) return result.reply;
-    if (result?.stop) return null;
+    if (result?.reply) { console.log(`[FLOW] Reply: "${result.reply}"`); return result.reply; }
+    if (result?.stop) { console.log(`[FLOW] Stopped at condition`); return null; }
 
     // Continue to next nodes
     const nextIds = graph[nodeId] || [];
@@ -53,7 +61,7 @@ async function runFlow(flow, event) {
   return null;
 }
 
-async function executeNode(node, ctx, knowledgeFiles) {
+async function executeNode(node, ctx, knowledgeFiles, apiKey = "") {
   switch (node.type) {
 
     case "condition": {
@@ -77,8 +85,13 @@ async function executeNode(node, ctx, knowledgeFiles) {
 
     case "knowledge": {
       const { source = "", searchMethod = "Keyword Match" } = node.data;
+      console.log(`[KNOWLEDGE] source="${source}" method="${searchMethod}" files=${JSON.stringify(knowledgeFiles.map(f => f.name))}`);
       const file = knowledgeFiles.find((f) => f.name === source);
-      if (!file) return null;
+      if (!file) {
+        console.warn(`[KNOWLEDGE] File "${source}" not found in knowledge base`);
+        return null;
+      }
+      console.log(`[KNOWLEDGE] Found "${source}" — ${file.content?.length || 0} chars`);
 
       if (searchMethod === "ส่งทั้งหมด") {
         ctx.knowledgeContext = file.content;
@@ -90,6 +103,7 @@ async function executeNode(node, ctx, knowledgeFiles) {
         );
         ctx.knowledgeContext = matched.length > 0 ? matched.join("\n") : file.content;
       }
+      console.log(`[KNOWLEDGE] Context set — ${ctx.knowledgeContext.length} chars`);
       return null;
     }
 
@@ -98,10 +112,11 @@ async function executeNode(node, ctx, knowledgeFiles) {
 
       const system = [systemPrompt, ctx.knowledgeContext]
         .filter(Boolean)
-        .join("\n\n---\n\n") || "You are a helpful LINE chatbot assistant.";
+        .join("\n\n---\n\nKnowledge Base:\n") || "You are a helpful LINE chatbot assistant.";
+      console.log(`[AI] model=${model} systemLen=${system.length} hasKnowledge=${!!ctx.knowledgeContext}`);
 
       try {
-        const response = await callAI(model, system, ctx.userText, parseInt(maxTokens) || 500);
+        const response = await callAI(model, system, ctx.userText, parseInt(maxTokens) || 500, apiKey);
         ctx.aiResponse = response;
       } catch (err) {
         console.error("[AI] Error:", err.message);
@@ -150,17 +165,18 @@ async function executeNode(node, ctx, knowledgeFiles) {
   }
 }
 
-async function callAI(model, system, userMessage, maxTokens) {
+async function callAI(model, system, userMessage, maxTokens, apiKey = "") {
   // รองรับ Claude models
   if (model.includes("claude")) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set");
+    const key = apiKey || process.env.ANTHROPIC_API_KEY;
+    if (!key) throw new Error("ANTHROPIC_API_KEY not set — ใส่ใน Settings panel หรือ server/.env");
+    apiKey = key;
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
+        "x-api-key": key,
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
